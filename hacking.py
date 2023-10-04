@@ -1,6 +1,7 @@
 import PySimpleGUI as sg
 import random
 import numpy as np
+import time
 
 # Constants
 MIN_WORD_SET_SIZE = 10 # Determins how many similar words are required to accept the word
@@ -25,10 +26,30 @@ SIM_SCORE_HARD = 0.6
 DEFAULT_FONT = "consolas"
 DEFAULT_FONT_SIZE = 12
 
+CRYPTO_CAPS_UPPER_LIMIT = 100
+
+# MAGIC Chances 1/x
+CHINESE_MAGIC_CHANCE = 20
+RUSSIAN_MAGIC_CHANCE = 20
+CRYPTO_MAGIC_CHANCE = 10
+ALIEN_MAGIC_CHANCE = 100
+
+ALIEN_TEXT_LENGTH = 2000
+
+# Global flags for magic
+chinese_magic_flag = False
+russian_magic_flag = False
+crypto_magic_flag = False
+alien_magic_flag = False
+
+# Global to keep value consitant with seeds
+crypto_caps_found = 0
+
 # This is not designed to be secure!
 ADMIN_HASH = 186320432
 
 attempts = NUM_ATTEMPTS
+used_seeds = []
 
 def consistant_hash(string):
     seed = 1
@@ -38,6 +59,7 @@ def consistant_hash(string):
     
 
 def find_words(difficulty, seed):
+    global crypto_caps_found
     # Set difficulty parameters
     if difficulty == "Easy":
         word_len = WORD_LEN_EASY
@@ -86,6 +108,15 @@ def find_words(difficulty, seed):
                 word_list.append(choice)
         if (len(word_list) == num_words):
             words_not_found_flag = False
+
+    crypto_caps_found = random.randint(1, CRYPTO_CAPS_UPPER_LIMIT)
+    
+    magic = check_for_magic(difficulty)
+    if magic == None:
+        print("No magic!")
+    else:
+        word_list.extend(magic)
+    
     
     for i in range(0, random.randint(0, 6)):
         word_list.append(gib_gen(difficulty))
@@ -111,6 +142,9 @@ def compare_words(word1, word2):
             total_similar += 1
     return total_similar / len(word1)
 
+#def check_for_magic(difficulty):
+
+
 #TODO: Improve the seeds by making them words
 def get_default_seed():
     input_file_path = 'input.txt'
@@ -118,6 +152,85 @@ def get_default_seed():
         words = input_file.read().splitlines()
     seed = random.choice(words)
     return seed
+
+def adjust_seed(seed):
+    global used_seeds
+    new_seed = seed
+    while (new_seed in used_seeds):
+        new_seed = new_seed + get_default_seed()
+    used_seeds.append(new_seed)
+    return new_seed
+
+def get_magic_word(difficulty, magic_type):
+    out = "[="
+    post = "=]"
+    num_char = 0
+    char = ""
+    if difficulty == "Easy":
+        num_char = WORD_LEN_EASY - 4
+    elif difficulty == "Medium":
+        num_char = WORD_LEN_MED - 4
+    else:
+        num_char = WORD_LEN_HARD - 4
+    
+    if magic_type == "chinese":
+        char = "C"
+    elif magic_type == "russian":
+        char = "R"
+    elif magic_type == "crypto":
+        char = "Z"
+    elif magic_type == "alien":
+        char = "A"
+    
+    for i in range(num_char):
+        out += char
+    
+    return out + post
+
+
+
+def check_for_magic(difficulty):
+    magic = []
+    global chinese_magic_flag
+    global russian_magic_flag
+    global crypto_magic_flag
+    global alien_magic_flag
+
+    # Chinese Magic (C)
+    if (random.randint(1, CHINESE_MAGIC_CHANCE) == 1):
+        chinese_magic_flag = True
+        magic.append(get_magic_word(difficulty, "chinese"))
+    
+    # Russian Magic (R)
+    if (random.randint(1, RUSSIAN_MAGIC_CHANCE) == 1):
+        russian_magic_flag = True
+        magic.append(get_magic_word(difficulty, "russian"))
+
+    # Crypto Magic (Z)
+    if (random.randint(1, CRYPTO_MAGIC_CHANCE) == 1):
+        crypto_magic_flag = True
+        magic.append(get_magic_word(difficulty, "crypto"))
+
+    # Alien Magic (A)
+    if (random.randint(1, ALIEN_MAGIC_CHANCE) == 1):
+        alien_magic_flag = True
+        magic.append(get_magic_word(difficulty, "alien"))
+    
+    if len(magic):
+        return magic
+    else:
+        return None
+
+def reset_magic_flags():
+    global chinese_magic_flag
+    global russian_magic_flag
+    global crypto_magic_flag
+    global alien_magic_flag
+
+    chinese_magic_flag = False
+    russian_magic_flag = False
+    crypto_magic_flag = False
+    alien_magic_flag = False
 
 def change_attempts(attempt = None):
     global attempts
@@ -130,6 +243,7 @@ def change_attempts(attempt = None):
 
 def send_output(string):
     window["output_box"].update(window["output_box"].get() + "\n" + string)
+    print(string)
 
 def gib_gen(difficulty):
     output = "</"
@@ -137,10 +251,10 @@ def gib_gen(difficulty):
     if difficulty == "Easy":
         for i in range(WORD_LEN_EASY - 4):
             output += random.choice(characters)
-    if difficulty == "Medium":
+    elif difficulty == "Medium":
        for i in range(WORD_LEN_MED - 4):
             output += random.choice(characters)
-    if difficulty == "Hard":
+    elif difficulty == "Hard":
        for i in range(WORD_LEN_HARD - 4):
             output += random.choice(characters)
     output += "/>"
@@ -174,6 +288,7 @@ def toggle_visiblility_upper(on_or_off):
         window["begin_game_button"].update(visible=False)        
 
 def toggle_visiblility_lower(on_or_off):
+    global lower_visible
     if (on_or_off == "on"):
         window["attempts_text"].update(visible=True)
         window["col1"].update(visible=True)
@@ -185,6 +300,7 @@ def toggle_visiblility_lower(on_or_off):
         window["Check Password"].update(visible=True)
         window["output_box"].update(visible=True)
         window["terminal"].update(visible=True)
+        lower_visible = True
     else:
         window["attempts_text"].update(visible=False)
         window["col1"].update(visible=False)
@@ -195,7 +311,8 @@ def toggle_visiblility_lower(on_or_off):
         window["enter_password_text"].update(visible=False)
         window["Check Password"].update(visible=False)
         window["output_box"].update(visible=False)
-        window["terminal"].update(visible=False) 
+        window["terminal"].update(visible=False)
+        lower_visible = False 
 
 # Assumes that both are the same length
 def score_guess(guess, answer):
@@ -204,6 +321,15 @@ def score_guess(guess, answer):
         if guess[i] == answer[i]:
             score += 1
     return "("+ str(score) + "/" + str(len(guess)) +")"
+
+def alien_text_gen():
+    return ''.join([generate_valid_utf8_char() for _ in range(ALIEN_TEXT_LENGTH)])
+
+def generate_valid_utf8_char():
+    while True:
+        code_point = random.randint(0, 0x10FFFF)
+        if code_point < 0xD800 or (0xDFFF < code_point < 0xFDD0) or (0xFDEF <= code_point <= 0x10FFFF):
+            return chr(code_point)
 
 def update_playfield(word_array):
     num_rows = len(word_array)
@@ -282,7 +408,7 @@ layout = [[sg.Column([[sg.Text(" Welcome to the", font=("consolas 20 bold"))],
 
           [sg.Column(
             [[sg.Text("Enter Password:", key="enter_password_text", visible=False, font=(DEFAULT_FONT,DEFAULT_FONT_SIZE))],
-             [sg.Input(key="text_input", visible=False, font=("Courier New", 12), size=(20, 1)), sg.Button("Check Password", visible=False)],
+             [sg.Input(key="text_input", visible=False, font=("Courier New", 12), size=(20, 1)), sg.Button("Check Password", visible=False, bind_return_key=True)],
              [sg.Multiline(key="output_box", size=(43, 8), visible=False, disabled=True, autoscroll=True, write_only=True, font=(DEFAULT_FONT,DEFAULT_FONT_SIZE))]],
             justification="c")],
         ]
@@ -290,12 +416,14 @@ layout = [[sg.Column([[sg.Text(" Welcome to the", font=("consolas 20 bold"))],
 window = sg.Window("Hacker", layout, size=(550, 800))
 
 words_guessed = []
-
+lower_visible = False
+difficulty = ""
 while True:
     event, values = window.read()
     if event == sg.WIN_CLOSED:
         break
     elif event == "begin_game_button":
+        reset_magic_flags()
         words_guessed.clear()
         window["text_input"].update("")
         window["output_box"].update("")
@@ -303,12 +431,12 @@ while True:
         if (len(values["seed_input"]) > 0):
             toggle_visiblility_lower("on")
             toggle_visiblility_upper("off")
-            answer, word_array = find_words(values["difficulty_input"], values["seed_input"])
-            print(answer)
+            difficulty = values["difficulty_input"]
+            answer, word_array = find_words(difficulty, adjust_seed(values["seed_input"]))
             update_playfield(word_array)
         else:
             sg.PopupError("Invalid Seed!")
-    elif event == "Check Password":
+    elif event == "Check Password" and lower_visible:
         guess = values["text_input"].lower()
         if guess == answer:
             toggle_visiblility_lower("off")
@@ -323,6 +451,34 @@ while True:
         elif (consistant_hash(guess) == ADMIN_HASH):
             send_output("Welcome Admin:\nPassword is: " + answer)
             window["text_input"].update("")
+        elif guess.upper() == get_magic_word(difficulty, "chinese") and chinese_magic_flag:
+            send_output("我们为您找到了一次额外的尝试\nAttempts +1")
+            change_attempts(attempts + 1)
+            chinese_magic_flag = False
+            window["text_input"].update("")
+        elif guess.upper() == get_magic_word(difficulty, "russian") and russian_magic_flag:
+            send_output("Бесплатная догадка")
+            looking_for_one = True
+            while (looking_for_one):
+                row = random.choice(word_array)
+                item = random.choice(row)
+                if item not in words_guessed:
+                    send_output(item + " - " + score_guess(item, answer))
+                    looking_for_one = False
+            russian_magic_flag = False
+            window["text_input"].update("")
+        elif guess.upper() == get_magic_word(difficulty, "crypto") and crypto_magic_flag:
+            send_output("You gained access to a Crypto-Cap stash\n" + 
+                        str(crypto_caps_found) +
+                        " Crpyto-Caps added to your account!")
+            crypto_magic_flag = False
+            window["text_input"].update("")
+        elif guess.upper() == get_magic_word(difficulty, "alien") and alien_magic_flag:
+            send_output("Internal Corruption error:\n" + alien_text_gen() + "... " + answer)
+            alien_magic_flag = False
+            window["text_input"].update("")
+
+
         else:
             words_guessed.append(guess)
             change_attempts()
